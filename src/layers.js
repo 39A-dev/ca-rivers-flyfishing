@@ -26,6 +26,26 @@ export function buildLayers() {
   });
   tag(out.streams, "streams");
 
+  // 1b) Enriched streams — the suitability target, drawn on top of the display
+  //     network. Default crisp-blue line until a suitability mode recolors it.
+  if (LAYERS.streamsEnriched?.url) {
+    const f = LAYERS.streamsEnriched.fields;
+    out.streamsEnriched = new FeatureLayer({
+      url: LAYERS.streamsEnriched.url,
+      title: LAYERS.streamsEnriched.title,
+      outFields: ["*"],
+      renderer: {
+        type: "simple",
+        symbol: { type: "simple-line", width: 2.5, color: [37, 99, 235, 0.9] },
+      },
+      popupTemplate: {
+        title: `{${f.name}}`,
+        content: [{ type: "fields", fieldInfos: [{ fieldName: f.gradient, label: "Gradient (%)" }] }],
+      },
+    });
+    tag(out.streamsEnriched, "streamsEnriched");
+  }
+
   // 2) BMI sample sites.
   if (LAYERS.bmi.url) {
     const f = LAYERS.bmi.fields;

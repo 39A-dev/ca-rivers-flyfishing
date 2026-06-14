@@ -47,34 +47,44 @@ export const LAYERS = {
    *    Default below is Esri's public "USA Rivers and Streams".
    */
   streams: {
-    title: "California Streams (enriched)",
-    // ENRICHED layer (you own it) — created by scripts/enrich_streams.py. It
-    // accumulates gradient_pct (+ flow_cfs when run without --no-flow) as you
-    // enrich regions; San Gabriel is done. Re-run the script on more bboxes to
-    // grow coverage (it appends). Suitability reads gradient_pct below.
-    url: "https://services8.arcgis.com/GfY0eEKd00oAzkH5/arcgis/rest/services/CA_Streams_Enriched/FeatureServer/0",
-    // Full raw statewide hydrography (740k reaches, no attributes) — the source
-    // the enrichment reads from. Swap back here to show all reaches uncolored:
-    // url: "https://services2.arcgis.com/Uq9r85Potqm3MfRV/ArcGIS/rest/services/CA_Streams_wm/FeatureServer/0",
+    title: "California Streams",
+    // DISPLAY layer — the FULL statewide hydrography (740k reaches). This is the
+    // water network you actually see. It's PUBLIC (anonymous-readable), so it
+    // renders even before sign-in. No fly-fishing attributes — suitability runs
+    // on `streamsEnriched` below, not here. (minScale keeps it fast; zoom in.)
+    url: "https://services2.arcgis.com/Uq9r85Potqm3MfRV/ArcGIS/rest/services/CA_Streams_wm/FeatureServer/0",
     fields: {
       name: "Name", // reach name (often null; GNIS_ID is a fallback)
-      // ✅ gradient is populated by the enrichment script (DEM slope at endpoints).
-      // flow_cfs exists but is null until you run enrichment WITHOUT --no-flow;
-      // leave flowCfs null so the flow criterion stays disabled (null breaks the filter).
-      gradient: "gradient_pct",
-      flowCfs: null, // set to "flow_cfs" after a flow-enabled enrichment run
-      tempF: null, // e.g. modeled/observed water temp → "TEMP_F"
-      publicAccess: null, // e.g. PAD-US / CPAD land-ownership join → "PUBLIC_ACCESS"
-      species: null, // e.g. CDFW fish distribution join → "TROUT_SPECIES"
+      gradient: null, // no attributes on the display layer — see streamsEnriched
+      flowCfs: null,
+      tempF: null,
+      publicAccess: null,
+      species: null,
     },
-    // Handy join keys already present on your layer, for enrichment:
-    joinKeys: {
-      nhd: "NHD_Permanent_Identifier",
-      gnis: "GNIS_ID",
-      dfg: "DFGWATERID",
-    },
-    // Downstream connectivity (bonus: enables stream-network tracing).
+    joinKeys: { nhd: "NHD_Permanent_Identifier", gnis: "GNIS_ID", dfg: "DFGWATERID" },
     network: { downstreamId: "Down_ID", id: "DFGWATERID", mouthMeasure: "Mouth_Meas" },
+  },
+
+  /**
+   * 1b) ENRICHED STREAMS — the SUITABILITY layer. A copy you own, populated by
+   *    scripts/enrich_streams.py with gradient_pct (+ flow_cfs when run without
+   *    --no-flow). The suitability panel filters/scores THESE reaches; they draw
+   *    on top of the full display network. San Gabriel is enriched so far —
+   *    re-run the script on more bboxes to grow coverage (it appends).
+   *    NOTE: private to your org, so suitability needs sign-in; the display
+   *    streams above stay visible to everyone.
+   */
+  streamsEnriched: {
+    title: "Streams — fly-fishing suitability",
+    url: "https://services8.arcgis.com/GfY0eEKd00oAzkH5/arcgis/rest/services/CA_Streams_Enriched/FeatureServer/0",
+    fields: {
+      name: "Name",
+      gradient: "gradient_pct", // ✅ populated (3DEP slope at endpoints)
+      flowCfs: null, // set to "flow_cfs" after a flow-enabled enrichment run
+      tempF: null,
+      publicAccess: null,
+      species: null,
+    },
   },
 
   /**
