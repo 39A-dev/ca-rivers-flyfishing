@@ -13,7 +13,9 @@ import { LAYERS, SUITABILITY_DEFAULTS, SUITABILITY_WEIGHTS } from "../config.js"
  * and the score weights redistribute so the gradient always spans 0–100.
  */
 export function createSuitability(view, streamsLayer) {
-  const f = LAYERS.streams.fields;
+  // Read the field mapping of the layer ACTUALLY passed in (e.g. streamsEnriched),
+  // not a hardcoded one — otherwise the wrong layer's fields drive the panel.
+  const f = (streamsLayer.__key && LAYERS[streamsLayer.__key]?.fields) || LAYERS.streams.fields;
   const state = { ...SUITABILITY_DEFAULTS, mode: "off" }; // off | filter | score
   const originalRenderer = streamsLayer.renderer; // restore when leaving score mode
 
