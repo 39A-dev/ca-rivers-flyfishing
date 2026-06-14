@@ -1,0 +1,18 @@
+{
+  "name": "ca-rivers-flyfishing",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "California rivers/streams/creeks — fly-fishing suitability, benthic macroinvertebrate sampling, stream-health editing, and road-access overrides. Custom app on the ArcGIS Maps SDK for JavaScript.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@arcgis/core": "^4.31.0"
+  },
+  "devDependencies": {
+    "vite": "^5.4.0"
+  }
+}
