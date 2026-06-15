@@ -172,6 +172,33 @@ export function buildLayers() {
     tag(out.caltrans, "caltrans");
   }
 
+  // 6) Catch Reports — crowd-sourced angler photos (editable, photo attachments).
+  if (LAYERS.catchReports?.url) {
+    const f = LAYERS.catchReports.fields;
+    out.catchReports = new FeatureLayer({
+      url: LAYERS.catchReports.url,
+      title: LAYERS.catchReports.title,
+      outFields: ["*"],
+      popupTemplate: {
+        title: `Catch: {${f.species}}`,
+        content: [
+          { type: "fields", fieldInfos: [
+            { fieldName: f.hasTrout, label: "Trout caught (1=yes)" },
+            { fieldName: f.caughtOn, label: "Caught on" },
+            { fieldName: f.notes, label: "Notes" },
+            { fieldName: f.source, label: "Source" },
+          ] },
+          { type: "attachments", displayType: "preview" }, // the photo
+        ],
+      },
+      renderer: {
+        type: "simple",
+        symbol: { type: "simple-marker", style: "circle", size: 10, color: [255, 140, 0], outline: { color: [255, 255, 255], width: 1.5 } },
+      },
+    });
+    tag(out.catchReports, "catchReports");
+  }
+
   return out;
 }
 

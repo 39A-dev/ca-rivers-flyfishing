@@ -64,6 +64,14 @@ body {
 .btn-ghost { background: #e2e8f0; color: #1e293b; }
 .directions { margin: 6px 0 0; padding-left: 18px; max-height: 160px; overflow: auto; font-size: 11px; color: #334155; }
 .directions li { margin: 2px 0; }
+
+/* catch panel */
+.catch-panel { width: 270px; }
+.filebtn { position: relative; display: block; }
+.filebtn input[type="file"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; }
+.filebtn span { display: block; text-align: center; padding: 8px; border: 1px dashed #94a3b8; border-radius: 6px; font-size: 12px; color: #1e293b; background: #f8fafc; }
+.catch-panel select, .txt { width: 100%; box-sizing: border-box; padding: 5px 7px; font-size: 12px; border: 1px solid #cbd5e1; border-radius: 5px; }
+.muted { margin: 0; font-size: 11px; color: #64748b; }
 .warn { margin: 0; font-size: 12px; color: #92400e; background: #fef3c7; padding: 8px; border-radius: 6px; }
 .warn code { background: rgba(0,0,0,0.06); padding: 0 3px; border-radius: 3px; }
 

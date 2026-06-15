@@ -11,6 +11,7 @@ import { buildLayers } from "./layers.js";
 import { createSuitability } from "./modules/suitability.js";
 import { createEditor } from "./modules/editing.js";
 import { createRouting } from "./modules/routing.js";
+import { createCatchReports } from "./modules/catch.js";
 import { initAuth } from "./auth.js";
 
 import "@arcgis/core/assets/esri/themes/light/main.css";
@@ -24,7 +25,7 @@ async function start() {
   // Draw order: streams underneath, points + roads on top.
   const map = new Map({
     basemap: MAP.basemap,
-    layers: [layers.streams, layers.streamsEnriched, layers.roads, layers.caltrans, layers.health, layers.bmi].filter(Boolean),
+    layers: [layers.streams, layers.streamsEnriched, layers.roads, layers.caltrans, layers.health, layers.bmi, layers.catchReports].filter(Boolean),
   });
 
   const view = new MapView({
@@ -70,6 +71,7 @@ async function start() {
   createSuitability(view, layers.streamsEnriched || layers.streams);
   createEditor(view, layers); // ✏️ BMI / health / road overrides (top-left)
   createRouting(view, layers.roads); // 🚗 access routing, avoids closures (bottom-right)
+  createCatchReports(view, layers.catchReports, layers.streamsEnriched); // 📷 photo catch reports (bottom-left)
 
   window.__view = view; // handy for console debugging
 }

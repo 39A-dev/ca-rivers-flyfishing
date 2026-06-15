@@ -89,6 +89,9 @@ export const LAYERS = {
       // not NorWeST — no NorWeST service covers SoCal; download the unit for real data.
       publicAccess: null,
       species: null,
+      // ✅ crowd-sourced: # of trout catch reports plotted near this reach (see the
+      // 📷 Log a catch panel). Each report bumps the nearest reach — direct evidence.
+      catch: "catch_count",
     },
   },
 
@@ -190,6 +193,25 @@ export const LAYERS = {
       delay: "estimatedDelay",
     },
   },
+
+  /**
+   * 6) CATCH REPORTS — crowd-sourced angler photos (the 📷 Log a catch panel).
+   *    A point per uploaded photo (plotted from its EXIF GPS, or tap-to-place),
+   *    with the photo as an attachment and a "trout caught" flag. Editable.
+   *    Trout catches bump the nearest reach's catch_count → suitability score.
+   */
+  catchReports: {
+    title: "Catch Reports",
+    url: "https://services8.arcgis.com/GfY0eEKd00oAzkH5/arcgis/rest/services/CA_Rivers_Catch_Reports/FeatureServer/0",
+    editable: true,
+    fields: {
+      species: "species",
+      hasTrout: "has_trout", // 1 = a trout was caught here (drives the score)
+      caughtOn: "caught_on",
+      notes: "notes",
+      source: "source",
+    },
+  },
 };
 
 // ── Fly-fishing suitability defaults (used by the suitability panel) ─────────
@@ -213,7 +235,12 @@ export const SUITABILITY_WEIGHTS = {
   flow: 30,
   temp: 30,
   access: 15,
+  catch: 40, // highest — an actual reported trout catch is the strongest evidence
 };
+
+// Catch reports → suitability: when a trout catch is plotted, the nearest stream
+// reach within this distance (meters) gets its catch_count bumped.
+export const CATCH_LINK_RADIUS_M = 400;
 
 // ── Routing / access ────────────────────────────────────────────────────────
 // "Route me to open access, avoiding closures." Uses Esri's World Route service,

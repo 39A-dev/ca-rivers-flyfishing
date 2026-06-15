@@ -24,6 +24,7 @@ export function createSuitability(view, streamsLayer) {
     flow: !!f.flowCfs,
     temp: !!f.tempF,
     access: !!f.publicAccess,
+    catch: !!f.catch, // crowd-sourced trout catches (score bonus only, no control)
   };
 
   const panel = buildPanel(state, has, apply);
@@ -54,6 +55,9 @@ export function createSuitability(view, streamsLayer) {
       [has.flow, SUITABILITY_WEIGHTS.flow, f.flowCfs, `$feature.${f.flowCfs} >= ${state.flowMinCfs} && $feature.${f.flowCfs} <= ${state.flowMaxCfs}`],
       [has.temp, SUITABILITY_WEIGHTS.temp, f.tempF, `$feature.${f.tempF} <= ${state.tempMaxF}`],
       [has.access, SUITABILITY_WEIGHTS.access, f.publicAccess, `$feature.${f.publicAccess} == 'Y' || $feature.${f.publicAccess} == 'Yes' || $feature.${f.publicAccess} == 'TRUE' || $feature.${f.publicAccess} == '1'`],
+      // crowd-sourced: a reach with reported trout catches earns the catch weight,
+      // boosting its score toward 100. Reaches with no reports (null) are skipped.
+      [has.catch, SUITABILITY_WEIGHTS.catch, f.catch, `$feature.${f.catch} > 0`],
     ];
     for (const [enabled, weight, field, test] of crit) {
       if (!enabled) continue;
