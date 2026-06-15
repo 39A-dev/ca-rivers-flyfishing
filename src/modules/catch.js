@@ -117,45 +117,55 @@ export function createCatchReports(view, catchLayer, enrichedLayer) {
     }
   }
 
-  // A catch marks the whole connected stream, not just one reach: snap to the
-  // nearest reach, then walk the chain of reaches that touch end-to-end and bump
-  // them all. (Names are null in this data, so connectivity is geometric.)
+  // A catch marks the whole STREAM it's on, not just one reach. Snap to the
+  // nearest reach; if it has a name, bump every reach of that named stream
+  // (e.g. "West Fork San Gabriel River"). If it's unnamed, fall back to walking
+  // the chain of reaches that touch end-to-end.
   async function bumpConnectedReaches(point) {
-    // nearest reach within the link radius
     const nq = enrichedLayer.createQuery();
     nq.geometry = point; nq.distance = CATCH_LINK_RADIUS_M; nq.units = "meters";
-    nq.spatialRelationship = "intersects"; nq.returnGeometry = true; nq.outFields = ["OBJECTID"];
+    nq.spatialRelationship = "intersects"; nq.returnGeometry = true; nq.outFields = ["OBJECTID", "Name"];
     const near = (await enrichedLayer.queryFeatures(nq)).features;
     if (!near.length) return null;
     let start = near[0], bestD = Infinity;
     for (const fe of near) { const d = geometryEngine.distance(point, fe.geometry, "meters"); if (d < bestD) { bestD = d; start = fe; } }
 
-    // all reaches (geometry) for connectivity tracing
-    const allQ = enrichedLayer.createQuery();
-    allQ.where = "1=1"; allQ.returnGeometry = true; allQ.outFields = ["OBJECTID", "catch_count"];
-    const all = (await enrichedLayer.queryFeatures(allQ)).features;
-    const byOid = new Map(all.map(fe => [fe.attributes.OBJECTID, fe]));
-    const ends = (g) => { const p = g.paths[0]; return [p[0], p[p.length - 1]]; };
-    const touch = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]) <= CATCH_CONNECT_SNAP_M;
+    const streamName = start.attributes.Name;
+    let targetOids;
 
-    // BFS over reaches that share an endpoint (the contiguous stream)
-    const seen = new Set([start.attributes.OBJECTID]);
-    const queue = [byOid.get(start.attributes.OBJECTID) || start];
-    while (queue.length) {
-      const cur = queue.shift();
-      const ce = ends(cur.geometry);
-      for (const fe of all) {
-        if (seen.has(fe.attributes.OBJECTID)) continue;
-        const xe = ends(fe.geometry);
-        if (ce.some(c => xe.some(e => touch(c, e)))) { seen.add(fe.attributes.OBJECTID); queue.push(fe); }
+    if (streamName) {
+      // name-based: the whole named stream
+      const q = enrichedLayer.createQuery();
+      q.where = `Name = '${streamName.replace(/'/g, "''")}'`;
+      q.outFields = ["OBJECTID", "catch_count"]; q.returnGeometry = false;
+      const feats = (await enrichedLayer.queryFeatures(q)).features;
+      targetOids = feats.map(f => [f.attributes.OBJECTID, f.attributes.catch_count]);
+    } else {
+      // geometric fallback: contiguous (touching) reaches
+      const allQ = enrichedLayer.createQuery();
+      allQ.where = "1=1"; allQ.returnGeometry = true; allQ.outFields = ["OBJECTID", "catch_count"];
+      const all = (await enrichedLayer.queryFeatures(allQ)).features;
+      const byOid = new Map(all.map(fe => [fe.attributes.OBJECTID, fe]));
+      const ends = (g) => { const p = g.paths[0]; return [p[0], p[p.length - 1]]; };
+      const touch = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]) <= CATCH_CONNECT_SNAP_M;
+      const seen = new Set([start.attributes.OBJECTID]);
+      const queue = [byOid.get(start.attributes.OBJECTID) || start];
+      while (queue.length) {
+        const cur = queue.shift();
+        const ce = ends(cur.geometry);
+        for (const fe of all) {
+          if (seen.has(fe.attributes.OBJECTID)) continue;
+          if (ce.some(c => ends(fe.geometry).some(e => touch(c, e)))) { seen.add(fe.attributes.OBJECTID); queue.push(fe); }
+        }
       }
+      targetOids = [...seen].map(oid => [oid, byOid.get(oid)?.attributes.catch_count]);
     }
 
-    const updates = [...seen].map(oid => new Graphic({
-      attributes: { OBJECTID: oid, catch_count: ((byOid.get(oid)?.attributes.catch_count) || 0) + 1 },
+    const updates = targetOids.map(([oid, cc]) => new Graphic({
+      attributes: { OBJECTID: oid, catch_count: (cc || 0) + 1 },
     }));
     await enrichedLayer.applyEdits({ updateFeatures: updates });
-    return seen.size;
+    return updates.length;
   }
 
   // Build circular photo-thumbnail markers from each catch's first attachment.
