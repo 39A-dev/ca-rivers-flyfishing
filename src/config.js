@@ -84,7 +84,9 @@ export const LAYERS = {
       // drainage area (totdasqkm × ~1 cfs/sq mi), resolved per reach via NLDI
       // COMID. An estimate, not gaged/EROM; for authoritative values, join the
       // NHDPlus EROMMA table (per-VPU download — no clean public API exists).
-      tempF: null,
+      tempF: "temp_f", // ✅ DENSE — Aug mean stream temp estimated from elevation
+      // (3DEP) via a lapse model (~cold up high, warm in the canyons). An estimate,
+      // not NorWeST — no NorWeST service covers SoCal; download the unit for real data.
       publicAccess: null,
       species: null,
     },
