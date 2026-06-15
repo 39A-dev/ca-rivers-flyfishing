@@ -31,29 +31,35 @@ export function createSuitability(view, streamsLayer) {
 
   // ── Filter (SQL where) ──────────────────────────────────────────────────
   function buildWhere() {
+    // A reach is "viable" if it passes every criterion it HAS DATA for. Missing
+    // data (NULL) on a criterion never excludes the reach — it just isn't judged
+    // on that factor (`field IS NULL OR <passes>`).
     const c = [];
-    if (has.gradient) c.push(`${f.gradient} <= ${state.gradientMaxPct}`);
-    if (has.flow) { c.push(`${f.flowCfs} >= ${state.flowMinCfs}`); c.push(`${f.flowCfs} <= ${state.flowMaxCfs}`); }
-    if (has.temp) c.push(`${f.tempF} <= ${state.tempMaxF}`);
-    if (has.access && state.requirePublicAccess) c.push(`${f.publicAccess} IN ('Y','Yes','TRUE','1','t')`);
+    if (has.gradient) c.push(`(${f.gradient} IS NULL OR ${f.gradient} <= ${state.gradientMaxPct})`);
+    if (has.flow) c.push(`(${f.flowCfs} IS NULL OR (${f.flowCfs} >= ${state.flowMinCfs} AND ${f.flowCfs} <= ${state.flowMaxCfs}))`);
+    if (has.temp) c.push(`(${f.tempF} IS NULL OR ${f.tempF} <= ${state.tempMaxF})`);
+    if (has.access && state.requirePublicAccess) c.push(`(${f.publicAccess} IS NULL OR ${f.publicAccess} IN ('Y','Yes','TRUE','1','t'))`);
     return c.length ? c.join(" AND ") : "1=1";
   }
 
   // ── Score (Arcade 0–100) ────────────────────────────────────────────────
   function buildScoreArcade() {
+    // Per reach: each criterion contributes its weight to BOTH the denominator
+    // (max) and — if passed — the numerator (s), but ONLY when that reach has
+    // data for it. A null field is skipped for that reach, so missing data never
+    // drags the score down; the reach is simply judged on what it has.
     const lines = ["var s = 0;", "var max = 0;"];
     const crit = [
-      [has.gradient, SUITABILITY_WEIGHTS.gradient, `$feature.${f.gradient} <= ${state.gradientMaxPct}`],
-      [has.flow, SUITABILITY_WEIGHTS.flow, `$feature.${f.flowCfs} >= ${state.flowMinCfs} && $feature.${f.flowCfs} <= ${state.flowMaxCfs}`],
-      [has.temp, SUITABILITY_WEIGHTS.temp, `$feature.${f.tempF} <= ${state.tempMaxF}`],
-      [has.access, SUITABILITY_WEIGHTS.access, `$feature.${f.publicAccess} == 'Y' || $feature.${f.publicAccess} == 'Yes' || $feature.${f.publicAccess} == 'TRUE' || $feature.${f.publicAccess} == '1'`],
+      [has.gradient, SUITABILITY_WEIGHTS.gradient, f.gradient, `$feature.${f.gradient} <= ${state.gradientMaxPct}`],
+      [has.flow, SUITABILITY_WEIGHTS.flow, f.flowCfs, `$feature.${f.flowCfs} >= ${state.flowMinCfs} && $feature.${f.flowCfs} <= ${state.flowMaxCfs}`],
+      [has.temp, SUITABILITY_WEIGHTS.temp, f.tempF, `$feature.${f.tempF} <= ${state.tempMaxF}`],
+      [has.access, SUITABILITY_WEIGHTS.access, f.publicAccess, `$feature.${f.publicAccess} == 'Y' || $feature.${f.publicAccess} == 'Yes' || $feature.${f.publicAccess} == 'TRUE' || $feature.${f.publicAccess} == '1'`],
     ];
-    for (const [enabled, weight, test] of crit) {
+    for (const [enabled, weight, field, test] of crit) {
       if (!enabled) continue;
-      lines.push(`max += ${weight};`);
-      lines.push(`if (${test}) { s += ${weight}; }`);
+      lines.push(`if (!IsEmpty($feature.${field})) { max += ${weight}; if (${test}) { s += ${weight}; } }`);
     }
-    lines.push("return IIf(max > 0, (s / max) * 100, 0);");
+    lines.push("return IIf(max > 0, (s / max) * 100, 50);"); // no data at all → neutral
     return lines.join("\n");
   }
 

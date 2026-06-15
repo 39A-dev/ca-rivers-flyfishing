@@ -80,7 +80,9 @@ export const LAYERS = {
     fields: {
       name: "Name",
       gradient: "gradient_pct", // ✅ populated (3DEP slope at endpoints)
-      flowCfs: null, // set to "flow_cfs" after a flow-enabled enrichment run
+      flowCfs: "flow_cfs", // ✅ enabled — gage-proxy flow (sparse: only reaches near
+      // a USGS gage get a value; headwaters stay null and are skipped per-reach,
+      // not penalized). For full coverage, swap to NHDPlus modeled mean-annual-flow.
       tempF: null,
       publicAccess: null,
       species: null,
