@@ -68,7 +68,7 @@ async function start() {
   // ── Feature modules ───────────────────────────────────────────────────────
   // 🎣 suitability runs on the ENRICHED layer (gradient data); the full display
   // streams stay visible underneath. Falls back to streams if no enriched layer.
-  createSuitability(view, layers.streamsEnriched || layers.streams);
+  createSuitability(view, layers.streamsEnriched || layers.streams, layers.streams);
   createEditor(view, layers); // ✏️ BMI / health / road overrides (top-left)
   createRouting(view, layers.roads); // 🚗 access routing, avoids closures (bottom-right)
   createCatchReports(view, layers.catchReports, layers.streamsEnriched); // 📷 photo catch reports (bottom-left)

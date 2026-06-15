@@ -12,7 +12,7 @@ import { LAYERS, SUITABILITY_DEFAULTS, SUITABILITY_WEIGHTS } from "../config.js"
  * Criteria whose field is `null` in config are skipped everywhere automatically,
  * and the score weights redistribute so the gradient always spans 0–100.
  */
-export function createSuitability(view, streamsLayer) {
+export function createSuitability(view, streamsLayer, displayLayer) {
   // Read the field mapping of the layer ACTUALLY passed in (e.g. streamsEnriched),
   // not a hardcoded one — otherwise the wrong layer's fields drive the panel.
   const f = (streamsLayer.__key && LAYERS[streamsLayer.__key]?.fields) || LAYERS.streams.fields;
@@ -71,7 +71,7 @@ export function createSuitability(view, streamsLayer) {
     const expr = buildScoreArcade();
     return {
       type: "simple",
-      symbol: { type: "simple-line", width: 2, color: [120, 120, 120] },
+      symbol: { type: "simple-line", width: 4, color: [120, 120, 120] },
       visualVariables: [
         {
           type: "color",
@@ -83,9 +83,10 @@ export function createSuitability(view, streamsLayer) {
           ],
         },
         {
+          // bold so the scored reaches read clearly over the base network
           type: "size",
           valueExpression: expr,
-          stops: [{ value: 0, size: 1.5 }, { value: 100, size: 4 }],
+          stops: [{ value: 0, size: 3 }, { value: 100, size: 8 }],
         },
       ],
     };
@@ -95,6 +96,11 @@ export function createSuitability(view, streamsLayer) {
     // Reset both effects, then apply the active one.
     streamsLayer.featureEffect = null;
     streamsLayer.renderer = originalRenderer;
+    // Dim the full base-streams network while judging, so the scored/filtered
+    // reaches stand out (restore it when off).
+    if (displayLayer && displayLayer !== streamsLayer) {
+      displayLayer.opacity = state.mode === "off" ? 1 : 0.25;
+    }
 
     if (state.mode === "off") {
       panel.setSummary("Off — showing all reaches as-is.");
