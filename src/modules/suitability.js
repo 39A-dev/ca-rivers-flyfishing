@@ -165,10 +165,10 @@ function buildPanel(state, has, onChange) {
       ${noFields ? `<p class="warn">No stream suitability fields configured. Open
         <code>src/config.js</code> → <code>LAYERS.streams.fields</code>, set real
         field names, reload.</p>` : ""}
-      ${has.gradient ? row("Max gradient %", "su-grad", state.gradientMaxPct, 0, 12, 0.5) : ""}
-      ${has.flow ? row("Min flow (cfs)", "su-flowmin", state.flowMinCfs, 0, 2000, 10) : ""}
-      ${has.flow ? row("Max flow (cfs)", "su-flowmax", state.flowMaxCfs, 0, 5000, 10) : ""}
-      ${has.temp ? row("Max temp (°F)", "su-temp", state.tempMaxF, 40, 80, 1) : ""}
+      ${has.gradient ? row("Max gradient %", "su-grad", state.gradientMaxPct, 0, 10, 0.5, [1, 6], "ideal trout water ~1–6%") : ""}
+      ${has.flow ? row("Min flow (cfs)", "su-flowmin", state.flowMinCfs, 0, 80, 1, [4, 15], "enough to hold trout (~6+ cfs)") : ""}
+      ${has.flow ? row("Max flow (cfs)", "su-flowmax", state.flowMaxCfs, 0, 600, 10, [150, 400], "still wadeable (≤ ~350 cfs)") : ""}
+      ${has.temp ? row("Max temp (°F)", "su-temp", state.tempMaxF, 40, 75, 1, [55, 66], "trout comfortable ≤ ~65°F") : ""}
       ${has.access ? `<label class="check"><input type="checkbox" id="su-access" ${state.requirePublicAccess ? "checked" : ""}/> Require public access</label>` : ""}
       <p class="summary" id="su-summary"></p>
     </div>`;
@@ -185,10 +185,20 @@ function buildPanel(state, has, onChange) {
   return { el, setSummary: (t) => ($("su-summary").textContent = t) };
 }
 
-function row(label, id, value, min, max, step) {
+function row(label, id, value, min, max, step, good, hint) {
+  // green "good" band drawn behind the track, spanning the [good[0], good[1]] values
+  let band = "";
+  if (good) {
+    const lo = Math.max(0, ((good[0] - min) / (max - min)) * 100);
+    const hi = Math.min(100, ((good[1] - min) / (max - min)) * 100);
+    band = `<span class="range-good" style="left:${lo}%;width:${hi - lo}%"></span>`;
+  }
   return `<label class="range">
     <span>${label}: <b id="${id}-val">${value}</b></span>
-    <input type="range" id="${id}" min="${min}" max="${max}" step="${step}" value="${value}" />
+    <div class="range-track">${band}
+      <input type="range" id="${id}" min="${min}" max="${max}" step="${step}" value="${value}" />
+    </div>
+    ${hint ? `<span class="range-hint">${hint}</span>` : ""}
   </label>`;
 }
 
