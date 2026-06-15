@@ -1,9 +1,11 @@
 import exifr from "exifr";
 import Point from "@arcgis/core/geometry/Point.js";
 import Graphic from "@arcgis/core/Graphic.js";
+import GraphicsLayer from "@arcgis/core/layers/GraphicsLayer.js";
+import esriRequest from "@arcgis/core/request.js";
 import { geographicToWebMercator } from "@arcgis/core/geometry/support/webMercatorUtils.js";
 import * as geometryEngine from "@arcgis/core/geometry/geometryEngine.js";
-import { SUITABILITY_WEIGHTS, CATCH_LINK_RADIUS_M } from "../config.js";
+import { CATCH_LINK_RADIUS_M, CATCH_CONNECT_SNAP_M } from "../config.js";
 
 /**
  * 📷 Log a catch — angler photo → catch report → suitability bonus.
@@ -26,6 +28,11 @@ export function createCatchReports(view, catchLayer, enrichedLayer) {
     onPlaceToggle: () => { state.placing = true; setStatus("Tap the map where you caught it…"); },
   });
   view.ui.add(panel.el, "bottom-left");
+
+  // circular photo-thumbnail markers, drawn over the catch points
+  const thumbs = new GraphicsLayer({ title: "Catch photos", listMode: "hide" });
+  view.map.add(thumbs);
+  catchLayer.when(() => refreshThumbs());
 
   // tap-to-place (used when a photo has no GPS, or to override)
   const clickHandle = view.on("click", (e) => {
@@ -93,14 +100,15 @@ export function createCatchReports(view, catchLayer, enrichedLayer) {
       fd.append("attachment", state.file, state.file.name || "catch.jpg");
       await catchLayer.addAttachment(new Graphic({ attributes: { [catchLayer.objectIdField]: oid } }), fd);
 
-      // 3) trout? bump the nearest reach's catch_count → suitability
+      // 3) trout? propagate the boost along the connected stream → suitability
       let linked = null;
-      if (vals.trout && enrichedLayer) linked = await bumpNearestReach(state.point);
+      if (vals.trout && enrichedLayer) linked = await bumpConnectedReaches(state.point);
 
       catchLayer.refresh();
+      refreshThumbs();
       if (linked) enrichedLayer.refresh();
       setStatus(linked
-        ? `✅ Catch logged — boosted the nearest reach (${linked} report${linked > 1 ? "s" : ""} now).`
+        ? `✅ Catch logged — marked ${linked} connected reach${linked > 1 ? "es" : ""} as prime water.`
         : "✅ Catch logged.");
       panel.reset(); state.file = null; state.point = null; view.graphics.removeAll();
     } catch (err) {
@@ -109,27 +117,87 @@ export function createCatchReports(view, catchLayer, enrichedLayer) {
     }
   }
 
-  async function bumpNearestReach(point) {
-    const q = enrichedLayer.createQuery();
-    q.geometry = point;
-    q.distance = CATCH_LINK_RADIUS_M;
-    q.units = "meters";
-    q.spatialRelationship = "intersects";
-    q.returnGeometry = true;
-    q.outFields = ["OBJECTID", "catch_count"];
-    const { features } = await enrichedLayer.queryFeatures(q);
-    if (!features.length) return null;
-    // nearest of the candidates
-    let best = features[0], bestD = Infinity;
-    for (const f of features) {
-      const d = geometryEngine.distance(point, f.geometry, "meters");
-      if (d < bestD) { bestD = d; best = f; }
+  // A catch marks the whole connected stream, not just one reach: snap to the
+  // nearest reach, then walk the chain of reaches that touch end-to-end and bump
+  // them all. (Names are null in this data, so connectivity is geometric.)
+  async function bumpConnectedReaches(point) {
+    // nearest reach within the link radius
+    const nq = enrichedLayer.createQuery();
+    nq.geometry = point; nq.distance = CATCH_LINK_RADIUS_M; nq.units = "meters";
+    nq.spatialRelationship = "intersects"; nq.returnGeometry = true; nq.outFields = ["OBJECTID"];
+    const near = (await enrichedLayer.queryFeatures(nq)).features;
+    if (!near.length) return null;
+    let start = near[0], bestD = Infinity;
+    for (const fe of near) { const d = geometryEngine.distance(point, fe.geometry, "meters"); if (d < bestD) { bestD = d; start = fe; } }
+
+    // all reaches (geometry) for connectivity tracing
+    const allQ = enrichedLayer.createQuery();
+    allQ.where = "1=1"; allQ.returnGeometry = true; allQ.outFields = ["OBJECTID", "catch_count"];
+    const all = (await enrichedLayer.queryFeatures(allQ)).features;
+    const byOid = new Map(all.map(fe => [fe.attributes.OBJECTID, fe]));
+    const ends = (g) => { const p = g.paths[0]; return [p[0], p[p.length - 1]]; };
+    const touch = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]) <= CATCH_CONNECT_SNAP_M;
+
+    // BFS over reaches that share an endpoint (the contiguous stream)
+    const seen = new Set([start.attributes.OBJECTID]);
+    const queue = [byOid.get(start.attributes.OBJECTID) || start];
+    while (queue.length) {
+      const cur = queue.shift();
+      const ce = ends(cur.geometry);
+      for (const fe of all) {
+        if (seen.has(fe.attributes.OBJECTID)) continue;
+        const xe = ends(fe.geometry);
+        if (ce.some(c => xe.some(e => touch(c, e)))) { seen.add(fe.attributes.OBJECTID); queue.push(fe); }
+      }
     }
-    const next = (best.attributes.catch_count || 0) + 1;
-    await enrichedLayer.applyEdits({ updateFeatures: [new Graphic({
-      attributes: { OBJECTID: best.attributes.OBJECTID, catch_count: next },
-    })] });
-    return next;
+
+    const updates = [...seen].map(oid => new Graphic({
+      attributes: { OBJECTID: oid, catch_count: ((byOid.get(oid)?.attributes.catch_count) || 0) + 1 },
+    }));
+    await enrichedLayer.applyEdits({ updateFeatures: updates });
+    return seen.size;
+  }
+
+  // Build circular photo-thumbnail markers from each catch's first attachment.
+  async function refreshThumbs() {
+    try {
+      thumbs.removeAll();
+      const q = catchLayer.createQuery();
+      q.where = "1=1"; q.returnGeometry = true; q.outFields = [catchLayer.objectIdField];
+      const feats = (await catchLayer.queryFeatures(q)).features;
+      for (const fe of feats) {
+        const oid = fe.attributes[catchLayer.objectIdField];
+        let atts;
+        try { atts = await catchLayer.queryAttachments({ objectIds: [oid] }); } catch { continue; }
+        const list = atts[oid];
+        if (!list || !list.length) continue;
+        try {
+          const resp = await esriRequest(list[0].url, { responseType: "blob" }); // SDK adds the token
+          const bmp = await createImageBitmap(resp.data);
+          thumbs.add(new Graphic({
+            geometry: fe.geometry,
+            symbol: { type: "picture-marker", url: circularThumb(bmp, 72), width: "42px", height: "42px" },
+          }));
+        } catch { /* skip this one */ }
+      }
+    } catch { /* layer not ready / no auth yet */ }
+  }
+
+  // Cover-crop the photo into a bordered circle, return a data URL.
+  function circularThumb(bmp, size) {
+    const c = document.createElement("canvas");
+    c.width = c.height = size;
+    const ctx = c.getContext("2d");
+    const r = size / 2;
+    const s = Math.min(bmp.width, bmp.height); // square cover-crop
+    const sx = (bmp.width - s) / 2, sy = (bmp.height - s) / 2;
+    ctx.save();
+    ctx.beginPath(); ctx.arc(r, r, r - 3, 0, 2 * Math.PI); ctx.clip();
+    ctx.drawImage(bmp, sx, sy, s, s, 0, 0, size, size);
+    ctx.restore();
+    ctx.beginPath(); ctx.arc(r, r, r - 2.5, 0, 2 * Math.PI);
+    ctx.lineWidth = 5; ctx.strokeStyle = "#ff8c00"; ctx.stroke();
+    return c.toDataURL("image/png");
   }
 
   function setStatus(t) { panel.setStatus(t); }

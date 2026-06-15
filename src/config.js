@@ -235,12 +235,17 @@ export const SUITABILITY_WEIGHTS = {
   flow: 30,
   temp: 30,
   access: 15,
-  catch: 40, // highest — an actual reported trout catch is the strongest evidence
 };
 
-// Catch reports → suitability: when a trout catch is plotted, the nearest stream
-// reach within this distance (meters) gets its catch_count bumped.
+// A reported trout catch is ground truth, not a prediction — so instead of
+// adding points, it FLOORS the reach's score at "prime" (the modeled score can
+// only push it higher). It also propagates along the connected stream so the
+// whole run reads prime, not just one segment.
+export const CATCH_PRIME_FLOOR = 85; // 0–100; a caught reach scores at least this
+// Catch reports link to the nearest reach within this distance (meters), then
+// the boost spreads to every reach contiguously connected to it.
 export const CATCH_LINK_RADIUS_M = 400;
+export const CATCH_CONNECT_SNAP_M = 60; // reaches whose endpoints are within this are "connected"
 
 // ── Routing / access ────────────────────────────────────────────────────────
 // "Route me to open access, avoiding closures." Uses Esri's World Route service,

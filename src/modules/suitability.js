@@ -1,4 +1,4 @@
-import { LAYERS, SUITABILITY_DEFAULTS, SUITABILITY_WEIGHTS } from "../config.js";
+import { LAYERS, SUITABILITY_DEFAULTS, SUITABILITY_WEIGHTS, CATCH_PRIME_FLOOR } from "../config.js";
 
 /**
  * Fly-fishing suitability — two complementary views over the streams layer:
@@ -55,15 +55,18 @@ export function createSuitability(view, streamsLayer, displayLayer) {
       [has.flow, SUITABILITY_WEIGHTS.flow, f.flowCfs, `$feature.${f.flowCfs} >= ${state.flowMinCfs} && $feature.${f.flowCfs} <= ${state.flowMaxCfs}`],
       [has.temp, SUITABILITY_WEIGHTS.temp, f.tempF, `$feature.${f.tempF} <= ${state.tempMaxF}`],
       [has.access, SUITABILITY_WEIGHTS.access, f.publicAccess, `$feature.${f.publicAccess} == 'Y' || $feature.${f.publicAccess} == 'Yes' || $feature.${f.publicAccess} == 'TRUE' || $feature.${f.publicAccess} == '1'`],
-      // crowd-sourced: a reach with reported trout catches earns the catch weight,
-      // boosting its score toward 100. Reaches with no reports (null) are skipped.
-      [has.catch, SUITABILITY_WEIGHTS.catch, f.catch, `$feature.${f.catch} > 0`],
     ];
     for (const [enabled, weight, field, test] of crit) {
       if (!enabled) continue;
       lines.push(`if (!IsEmpty($feature.${field})) { max += ${weight}; if (${test}) { s += ${weight}; } }`);
     }
-    lines.push("return IIf(max > 0, (s / max) * 100, 50);"); // no data at all → neutral
+    lines.push("var base = IIf(max > 0, (s / max) * 100, 50);"); // modeled score
+    // A reported trout catch is proof, not prediction: floor the score at prime.
+    if (has.catch) {
+      lines.push(`return IIf(!IsEmpty($feature.${f.catch}) && $feature.${f.catch} > 0, Max(base, ${CATCH_PRIME_FLOOR}), base);`);
+    } else {
+      lines.push("return base;");
+    }
     return lines.join("\n");
   }
 
