@@ -80,9 +80,10 @@ export const LAYERS = {
     fields: {
       name: "Name",
       gradient: "gradient_pct", // ✅ populated (3DEP slope at endpoints)
-      flowCfs: "flow_cfs", // ✅ enabled — gage-proxy flow (sparse: only reaches near
-      // a USGS gage get a value; headwaters stay null and are skipped per-reach,
-      // not penalized). For full coverage, swap to NHDPlus modeled mean-annual-flow.
+      flowCfs: "flow_cfs", // ✅ DENSE — estimated mean flow from NHDPlus total
+      // drainage area (totdasqkm × ~1 cfs/sq mi), resolved per reach via NLDI
+      // COMID. An estimate, not gaged/EROM; for authoritative values, join the
+      // NHDPlus EROMMA table (per-VPU download — no clean public API exists).
       tempF: null,
       publicAccess: null,
       species: null,
@@ -194,8 +195,10 @@ export const LAYERS = {
 // satisfies every ENABLED criterion (criteria whose field is null are ignored).
 export const SUITABILITY_DEFAULTS = {
   gradientMaxPct: 4, // walkable/wadeable; steeper = pocket water
-  flowMinCfs: 50,
-  flowMaxCfs: 800,
+  // Small-stream fly-fishing window: below ~8 cfs is a trickle, above ~250 is
+  // big/blown-out water. Tune for the river class you're targeting.
+  flowMinCfs: 8,
+  flowMaxCfs: 250,
   tempMaxF: 68, // trout stress above ~68°F
   requirePublicAccess: true,
 };
