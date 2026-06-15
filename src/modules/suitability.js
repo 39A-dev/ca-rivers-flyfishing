@@ -27,7 +27,7 @@ export function createSuitability(view, streamsLayer, displayLayer) {
     catch: !!f.catch, // crowd-sourced trout catches (score bonus only, no control)
   };
 
-  const panel = buildPanel(state, has, apply);
+  const panel = buildPanel(state, has, () => applyAndFocus());
   view.ui.add(panel.el, "top-right");
 
   // ── Filter (SQL where) ──────────────────────────────────────────────────
@@ -128,8 +128,22 @@ export function createSuitability(view, streamsLayer, displayLayer) {
     }
   }
 
+  // When the user first turns on a scoring/filter mode, fly to the scored reaches
+  // so they don't have to hunt for the (sparse) enriched water.
+  let lastMode = "off";
+  const applyAndFocus = async () => {
+    apply();
+    if (lastMode === "off" && state.mode !== "off") {
+      try {
+        const r = await streamsLayer.queryExtent();
+        if (r.extent) view.goTo(r.extent.expand(1.4), { duration: 800 });
+      } catch { /* ignore */ }
+    }
+    lastMode = state.mode;
+  };
+
   apply();
-  return { apply, state };
+  return { apply: applyAndFocus, state };
 }
 
 function buildPanel(state, has, onChange) {
